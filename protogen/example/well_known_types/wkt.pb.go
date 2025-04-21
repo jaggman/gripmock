@@ -8,14 +8,15 @@ package well_known_types
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
+	reflect "reflect"
+
 	api "google.golang.org/genproto/protobuf/api"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
+	empty "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
