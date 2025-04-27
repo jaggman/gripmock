@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/text/cases"
@@ -83,6 +84,7 @@ type Output struct {
 	Data    map[string]interface{} `json:"data"`
 	Error   string                 `json:"error"`
 	Code    *codes.Code            `json:"code,omitempty"`
+	Latency *time.Duration         `json:"latency,omitempty"`
 	Headers map[string]string      `json:"headers,omitempty"`
 }
 
