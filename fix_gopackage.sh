@@ -29,18 +29,14 @@ do
   mkdir -p "$newdir" && \
     cp "$proto" "$_" && \
 
-    # Force remove any declaration of go_package
-    # then replace it with our own declaration below
-    sed -i 's/^option go_package.*$//g' $newfile
-
-
-  # get the line number of "syntax" declaration
-  syntaxLineNum="$(grep -n "syntax" "$newfile" | head -n 1 | cut -d: -f1)"
+  # Force remove any declaration of go_package
+  # then replace it with our own declaration below
+  sed -i 's/^option go_package.*$//g' $newfile
 
   goPackageString="option go_package = \"github.com/tokopedia/gripmock/protogen/$dir\";"
 
   # append our own go_package delcaration just below "syntax" declaration
-  sed -i "${syntaxLineNum}s~$~\n$goPackageString~" $newfile
+  sed -i "/^syntax.*$/a $goPackageString" $newfile
   echo $newfile
 done
 

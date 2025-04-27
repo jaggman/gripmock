@@ -1,10 +1,9 @@
 FROM golang:alpine3.20
 
-# install tools (bash, git, protobuf, protoc-gen-go, protoc-grn-go-grpc, pkger)
+# install tools (bash, git, protobuf, protoc-gen-go, protoc-grn-go-grpc)
 RUN apk -U --no-cache add bash git protobuf &&\
     go install -v google.golang.org/protobuf/cmd/protoc-gen-go@latest &&\
-    go install -v google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest &&\
-    go install github.com/markbates/pkger/cmd/pkger@latest
+    go install -v google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 # cloning well-known-types
 # only use needed files
@@ -23,7 +22,7 @@ VOLUME /proto /stubs
 WORKDIR /go/src/github.com/tokopedia/gripmock/protoc-gen-gripmock
 
 # install generator plugin
-RUN pkger && go install -v
+RUN go install -v
 
 WORKDIR /go/src/github.com/tokopedia/gripmock
 

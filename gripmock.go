@@ -126,11 +126,16 @@ func getProtodirs(protoPath string, imports []string) []string {
 }
 
 func generateProtoc(param protocParam) {
-	protoDirs, protoPaths := getProtoDirAndPath(param.protoPath)
-	param.imports = append(param.imports, protoDirs...)
-	param.protoPath = protoPaths
+	protoPaths := []string{}
+	for _, proto := range param.protoPath {
+		dir, paths := getProtoDirAndPath(proto)
+		dir = "protogen" + dir
+		paths = fixGoPackage(paths)
 
-	// param.protoPath = fixGoPackage(param.protoPath)
+		param.imports = append(param.imports, dir)
+		protoPaths = append(protoPaths, paths...)
+	}
+	param.protoPath = protoPaths
 
 	// estimate args length to prevent expand
 	args := make([]string, 0, len(param.imports)+len(param.protoPath)+2)
@@ -143,33 +148,29 @@ func generateProtoc(param protocParam) {
 	pbOutput := os.Getenv("GOPATH") + "/src"
 	args = append(args, "--go_out="+pbOutput)
 	args = append(args, "--go-grpc_out=require_unimplemented_servers=false:"+pbOutput)
-	// args = append(args, "--go_opt=paths=source_relative")
-	// args = append(args, "--go-grpc_opt=paths=source_relative")
 	args = append(args, fmt.Sprintf("--gripmock_out=admin-port=%s,grpc-address=%s,grpc-port=%s:%s",
 		param.adminPort, param.grpcAddress, param.grpcPort, param.output))
 	args = append(args, param.protoPath...)
 	protoc := exec.Command("protoc", args...)
 	protoc.Stdout = os.Stdout
 	protoc.Stderr = os.Stderr
-	err := protoc.Run()
-	if err != nil {
+	if err := protoc.Run(); err != nil {
 		log.Fatal("Fail on protoc ", err)
 	}
 }
 
-func getProtoDirAndPath(paths []string) (protoDirs, protoPaths []string) {
-	for _, proto := range paths {
-		stat, err := os.Stat(proto)
-		if err != nil {
-			fmt.Println(paths)
-			log.Fatal(fmt.Errorf("fail to stat proto %s: %w", proto, err))
-		}
-		if stat.Mode().IsRegular() {
-			protoPaths = append(protoPaths, proto)
-		} else if stat.Mode().IsDir() {
-			protoDirs = append(protoDirs, proto)
-			protoPaths = append(protoPaths, readDirProto(proto)...)
-		}
+func getProtoDirAndPath(proto string) (protoDir string, protoPaths []string) {
+	stat, err := os.Stat(proto)
+	if err != nil {
+		fmt.Println(proto)
+		log.Fatal(fmt.Errorf("fail to stat proto %s: %w", proto, err))
+	}
+	if stat.Mode().IsRegular() {
+		protoDir = path.Dir(proto)
+		protoPaths = append(protoPaths, proto)
+	} else if stat.Mode().IsDir() {
+		protoDir = proto
+		protoPaths = append(protoPaths, readDirProto(proto)...)
 	}
 
 	return
