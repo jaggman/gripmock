@@ -6,17 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -153,9 +153,10 @@ type payload struct {
 }
 
 type response struct {
-	Data  interface{} `json:"data"`
-	Error string      `json:"error"`
-	Code  *codes.Code `json:"code,omitempty"`
+	Data    interface{}       `json:"data"`
+	Error   string            `json:"error"`
+	Code    *codes.Code       `json:"code,omitempty"`
+	Latency *time.Duration    `json:"latency,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
 }
 
@@ -186,7 +187,7 @@ func findStub(ctx context.Context, service, method string, headers metadata.MD, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf(string(body))
 	}
 
@@ -209,6 +210,10 @@ func findStub(ctx context.Context, service, method string, headers metadata.MD, 
     if respRPC.Headers != nil {
         md := metadata.New(respRPC.Headers)
         grpc.SetHeader(ctx, md)
+    }
+
+    if respRPC.Latency != nil {
+        time.Sleep(*respRPC.Latency * time.Millisecond)
     }
 
 	data, _ := json.Marshal(respRPC.Data)
