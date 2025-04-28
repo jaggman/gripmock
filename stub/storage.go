@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/lithammer/fuzzysearch/fuzzy"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var mx = sync.Mutex{}
@@ -35,6 +37,10 @@ type request struct {
 }
 
 func storeStub(stub *Stub) error {
+	// due to golang implementation
+	// method name must capital
+	stub.Method = cases.Title(language.Und, cases.NoLower).String(stub.Method)
+
 	return stubStorage.storeStub(stub)
 }
 
@@ -86,6 +92,10 @@ type closeMatch struct {
 }
 
 func findStub(stub *findStubPayload) (*Output, error) {
+	// due to golang implementation
+	// method name must capital
+	stub.Method = cases.Title(language.Und, cases.NoLower).String(stub.Method)
+
 	mx.Lock()
 	defer mx.Unlock()
 	storeRequest(stub)

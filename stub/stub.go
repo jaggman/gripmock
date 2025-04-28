@@ -9,27 +9,25 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	"google.golang.org/grpc/codes"
 )
 
 type Options struct {
-	Port     string
+	BindPort int64
 	BindAddr string
 	StubPath string
 }
 
-const DEFAULT_PORT = "4771"
+const DEFAULT_PORT = 4771
 
 var stubPath string
 
 func RunStubServer(opt Options) {
-	if opt.Port == "" {
-		opt.Port = DEFAULT_PORT
+	if opt.BindPort <= 0 {
+		opt.BindPort = DEFAULT_PORT
 	}
 	stubPath = opt.StubPath
-	addr := opt.BindAddr + ":" + opt.Port
+	addr := fmt.Sprintf("%s:%d", opt.BindAddr, opt.BindPort)
 	r := chi.NewRouter()
 	r.Post("/add", addStub)
 	r.Get("/", listStub)
@@ -135,10 +133,6 @@ func validateStub(stub *Stub) error {
 		return fmt.Errorf("method name can't be emtpy")
 	}
 
-	// due to golang implementation
-	// method name must capital
-	stub.Method = cases.Title(language.Und, cases.NoLower).String(stub.Method)
-
 	switch {
 	case stub.Input.Contains != nil:
 		break
@@ -174,10 +168,6 @@ func handleFindStub(w http.ResponseWriter, r *http.Request) {
 		responseError(err, w)
 		return
 	}
-
-	// due to golang implementation
-	// method name must capital
-	stub.Method = cases.Title(language.Und, cases.NoLower).String(stub.Method)
 
 	output, err := findStub(stub)
 	if err != nil {
