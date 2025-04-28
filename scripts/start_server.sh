@@ -9,4 +9,4 @@ go mod tidy
 
 # Run the server.go file
 echo "Running server.go..."
-go run server.go 
+go run ./ $@

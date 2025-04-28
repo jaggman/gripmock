@@ -10,20 +10,21 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
-
-	"github.com/tokopedia/gripmock/stub"
 )
 
 func main() {
 	outputPointer := flag.String("o", "", "directory to output server.go. Default is $GOPATH/src/grpc/")
-	grpcPort := flag.String("grpc-port", "4770", "Port of gRPC tcp server")
-	grpcBindAddr := flag.String("grpc-listen", "", "Address the gRPC server will bind to. Default to localhost, set to 0.0.0.0 to use from another machine")
-	adminport := flag.String("admin-port", "4771", "Port of stub admin server")
-	adminBindAddr := flag.String("admin-listen", "", "Address the admin server will bind to. Default to localhost, set to 0.0.0.0 to use from another machine")
-	stubPath := flag.String("stub", "/stubs", "Path where the stub files are (Optional)")
 	imports := flag.String("imports", "/protobuf", "comma separated imports path. default path /protobuf is where gripmock Dockerfile install WKT protos")
+
+	serverParam := serverParam{}
+	flag.StringVar(&serverParam.grpcAddress, "grpc-listen", "", "Address the gRPC server will bind to. Default to localhost, set to 0.0.0.0 to use from another machine")
+	flag.Int64Var(&serverParam.grpcPort, "grpc-port", 4770, "BindPort of gRPC tcp server")
+	flag.StringVar(&serverParam.adminAddress, "admin-listen", "", "Address the admin server will bind to. Default to localhost, set to 0.0.0.0 to use from another machine")
+	flag.Int64Var(&serverParam.adminPort, "admin-port", 4771, "BindPort of stub admin server")
+	flag.StringVar(&serverParam.stubPath, "stub", "/stubs", "Path where the stub files are (Optional)")
 
 	if len(os.Args) == 0 {
 		log.Fatal("No arguments were passed")
@@ -50,13 +51,6 @@ func main() {
 		os.Mkdir(output, os.ModePerm)
 	}
 
-	// run admin stub server
-	stub.RunStubServer(stub.Options{
-		StubPath: *stubPath,
-		Port:     *adminport,
-		BindAddr: *adminBindAddr,
-	})
-
 	// parse proto files
 	protoPaths := flag.Args()
 
@@ -68,21 +62,18 @@ func main() {
 
 	// generate pb.go and grpc server based on proto
 	generateProtoc(protocParam{
-		protoPath:   protoPaths,
-		adminPort:   *adminport,
-		grpcAddress: *grpcBindAddr,
-		grpcPort:    *grpcPort,
-		output:      output,
-		imports:     importDirs,
+		protoPath: protoPaths,
+		output:    output,
+		imports:   importDirs,
 	})
 
 	// and run
-	run, runerr := runGrpcServer(output)
+	run, errCh := runGrpcServer(serverParam)
 
 	term := make(chan os.Signal)
 	signal.Notify(term, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGINT)
 	select {
-	case err := <-runerr:
+	case err := <-errCh:
 		log.Fatal(err)
 	case <-term:
 		fmt.Println("Stopping gRPC Server")
@@ -91,12 +82,9 @@ func main() {
 }
 
 type protocParam struct {
-	protoPath   []string
-	adminPort   string
-	grpcAddress string
-	grpcPort    string
-	output      string
-	imports     []string
+	protoPath []string
+	output    string
+	imports   []string
 }
 
 func getProtodirs(protoPath string, imports []string) []string {
@@ -153,8 +141,7 @@ func generateProtoc(param protocParam) {
 	pbOutput := os.Getenv("GOPATH") + "/src"
 	args = append(args, "--go_out="+pbOutput)
 	args = append(args, "--go-grpc_out=require_unimplemented_servers=false:"+pbOutput)
-	args = append(args, fmt.Sprintf("--gripmock_out=admin-port=%s,grpc-address=%s,grpc-port=%s:%s",
-		param.adminPort, param.grpcAddress, param.grpcPort, param.output))
+	args = append(args, fmt.Sprintf("--gripmock_out=%s", param.output))
 	args = append(args, param.protoPath...)
 	protoc := exec.Command("protoc", args...)
 	protoc.Stdout = os.Stdout
@@ -215,8 +202,39 @@ func fixGoPackage(protoPaths []string) []string {
 	return strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 }
 
-func runGrpcServer(output string) (*exec.Cmd, <-chan error) {
-	run := exec.Command("start_server.sh")
+type serverParam struct {
+	adminAddress string
+	adminPort    int64
+	grpcAddress  string
+	grpcPort     int64
+	stubPath     string
+}
+
+func runGrpcServer(params serverParam) (*exec.Cmd, <-chan error) {
+	args := []string{
+		"--grpc-port=" + strconv.FormatInt(params.grpcPort, 10),
+		"--admin-port=" + strconv.FormatInt(params.adminPort, 10),
+	}
+	if params.grpcAddress != "" {
+		args = append(args, "--grpc-listen="+params.grpcAddress)
+	}
+	if params.adminAddress != "" {
+		args = append(args, "--admin-listen="+params.adminAddress)
+	}
+	if params.stubPath != "" {
+		if string(params.stubPath[0]) != "/" {
+			wd, err := os.Getwd()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			params.stubPath = path.Join(wd, params.stubPath)
+		}
+
+		args = append(args, "--stubs="+params.stubPath)
+	}
+
+	run := exec.Command("start_server.sh", args...)
 	run.Stdout = os.Stdout
 	run.Stderr = os.Stderr
 	err := run.Start()
@@ -228,5 +246,6 @@ func runGrpcServer(output string) (*exec.Cmd, <-chan error) {
 	go func() {
 		runerr <- run.Wait()
 	}()
+
 	return run, runerr
 }

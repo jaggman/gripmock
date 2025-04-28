@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -13,14 +12,10 @@ import (
 
 	"golang.org/x/tools/imports"
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	descriptor "google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
-
-var _ = json.Marshal
-var _ = protojson.Unmarshal
 
 func main() {
 	// Tip of the hat to Tim Coulson
@@ -48,24 +43,16 @@ func main() {
 		protos[index] = file.Proto
 	}
 
-	params := make(map[string]string)
-	for _, param := range strings.Split(request.GetParameter(), ",") {
-		split := strings.Split(param, "=")
-		params[split[0]] = split[1]
-	}
-
 	buf := new(bytes.Buffer)
 	err = generateServer(protos, &Options{
-		writer:    buf,
-		adminPort: params["admin-port"],
-		grpcAddr:  fmt.Sprintf("%s:%s", params["grpc-address"], params["grpc-port"]),
+		writer: buf,
 	})
 
 	if err != nil {
 		log.Fatalf("Failed to generate server %v", err)
 	}
 
-	file := plugin.NewGeneratedFile("server.go", ".")
+	file := plugin.NewGeneratedFile("register.go", ".")
 	file.Write(buf.Bytes())
 
 	// Generate a response from our plugin and marshall as protobuf
@@ -81,9 +68,6 @@ func main() {
 type generatorParam struct {
 	Services     []Service
 	Dependencies map[string]string
-	GrpcAddr     string
-	AdminPort    string
-	PbPath       string
 }
 
 type Service struct {
@@ -111,14 +95,12 @@ const (
 )
 
 type Options struct {
-	writer    io.Writer
-	grpcAddr  string
-	adminPort string
-	pbPath    string
-	format    bool
+	writer io.Writer
+	pbPath string
+	format bool
 }
 
-//go:embed server.tmpl
+//go:embed register.tmpl
 var SERVER_TEMPLATE string
 
 func generateServer(protos []*descriptor.FileDescriptorProto, opt *Options) error {
@@ -128,9 +110,6 @@ func generateServer(protos []*descriptor.FileDescriptorProto, opt *Options) erro
 	param := generatorParam{
 		Services:     services,
 		Dependencies: deps,
-		GrpcAddr:     opt.grpcAddr,
-		AdminPort:    opt.adminPort,
-		PbPath:       opt.pbPath,
 	}
 
 	if opt == nil {
@@ -141,7 +120,7 @@ func generateServer(protos []*descriptor.FileDescriptorProto, opt *Options) erro
 		opt.writer = os.Stdout
 	}
 
-	tmpl := template.New("server.tmpl")
+	tmpl := template.New("register.tmpl")
 	tmpl, err := tmpl.Parse(SERVER_TEMPLATE)
 	if err != nil {
 		return fmt.Errorf("template parse %v", err)
